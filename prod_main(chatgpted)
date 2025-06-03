@@ -1,0 +1,158 @@
+require('dotenv').config();
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const path = require('path');
+const fs = require('fs');
+
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-extensions',
+            '--disable-gpu',
+            '--disable-features=site-per-process'
+        ]
+    }
+});
+
+let menuImage = null;
+
+client.once('ready', async () => {
+    console.log('✅ WhatsApp client is ready.');
+
+    // Preload and cache the menu image
+    try {
+        const imagePath = path.resolve('menu.jpg');
+        const imageData = await fs.promises.readFile(imagePath, { encoding: 'base64' });
+        menuImage = new MessageMedia('image/jpeg', imageData, 'menu.jpg');
+        console.log('📸 Menu image loaded.');
+    } catch (err) {
+        console.error('❌ Failed to load menu image:', err);
+    }
+});
+
+client.on('qr', qr => {
+    qrcode.generate(qr, { small: true });
+});
+
+client.initialize();
+
+// === Business Info ===
+const delUrl = 'https://feedme.cc/681c7c3c44b369001c432de7';
+
+const messages = {
+    welcome: `👋 *Welcome to O'Pizza!*
+🎉 We're officially opening on *June 4th*! 🎉
+
+To celebrate our launch:
+🍕 Enjoy *FREE pizza tasting* at our store!
+💥 Get *20% off* all walk-in orders – only on opening day!
+
+How would you like to order?
+
+Please reply with a number (1, 2 or 3):
+1️⃣ *Takeaway*  
+2️⃣ *Delivery*  
+3️⃣ *FAQ & Inquiry*`,
+
+    takeaway: `*You selected Takeaway.*
+
+Please place your order using the link below:
+🔗 ${delUrl}
+
+🔁 *Type* \`1\` to place a new order.`,
+
+    delivery: `🏍️ *You selected Delivery.*
+
+Please place your order through our delivery partner:
+🔗 ${delUrl}
+
+🔁 *Type* \`1\` to place a new order.`,
+
+    faq: `# 🍕 O'Pizza - Frequently Asked Questions (FAQ)
+
+📍 *Our Location:*  
+Lot 763, Jalan 2C, Kampung Baru Subang, 40150 Shah Alam, Selangor  
+📌 [🗺️ View on Google Maps](https://maps.app.goo.gl/BjPVJkrs9zCCJTkV9)
+
+1. **Are you halal?**  
+✅ Yes, we use only halal-certified ingredients. We do not serve pork or alcohol.
+
+2. **Do you offer dine-in?**  
+❌ We do not offer dine-in. But we do offer takeaway and delivery.  
+🔗 ${delUrl}  
+You can also pre-order for future pickup (within 7 days).
+
+3. **What are your business hours?**  
+🕙 Open daily from 10:00 AM to 9:00 PM.
+
+❓ *More questions?*  
+Message us at **+60185795338** — we’re happy to help!
+
+*Type* \`\`\`1\`\`\` *to place an order.*`,
+
+    closed: `*Hi! We're currently closed.* 🕘  
+Our business hours are 10 AM to 9 PM.
+
+Please reach out during those hours to place an order — we’ll be glad to help you then!`,
+
+    invalid: `❗ *Please enter a valid option (1, 2 or 3).*`
+};
+
+// === Utils ===
+
+function isBusinessHours() {
+    const now = new Date();
+    const h = now.getHours();
+    const m = now.getMinutes();
+    return (h > 10 && h < 21) || (h === 10) || (h === 21 && m === 0);
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+const userStates = new Map();
+
+// === Message Handler ===
+
+client.on('message', async msg => {
+    const user = msg.from;
+    const option = msg.body.trim().toLowerCase();
+    const state = userStates.get(user) || 'new_start';
+
+    if (!isBusinessHours()) {
+        await client.sendMessage(user, messages.closed);
+        return;
+    }
+
+    // Handle fresh user
+    if (state === 'new_start') {
+        await client.sendMessage(user, messages.welcome);
+        if (menuImage) {
+            await client.sendMessage(user, menuImage);
+            await delay(1000); // Prevent slowdown after sending image
+        }
+        userStates.set(user, 'start');
+        return;
+    }
+
+    // Handle option responses
+    if (state === 'start') {
+        if (option === '1') {
+            await client.sendMessage(user, messages.takeaway);
+        } else if (option === '2') {
+            await client.sendMessage(user, messages.delivery);
+        } else if (option === '3') {
+            await client.sendMessage(user, messages.faq);
+        } else {
+            await client.sendMessage(user, messages.invalid);
+            return;
+        }
+        userStates.set(user, 'new_start');
+    }
+});
