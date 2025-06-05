@@ -38,11 +38,6 @@ client.initialize();
 
 const pickupWelcomeMessage = 
 `👋 *Welcome to O'Pizza!*
-🎉 We're officially opening on *June 4th*! 🎉
-
-To celebrate our launch:
-🍕 Enjoy *FREE pizza tasting* at our store!
-💥 Get *20% off* all walk-in orders – only on opening day!
 
 How would you like to order?
 
