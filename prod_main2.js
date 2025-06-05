@@ -20,6 +20,7 @@ const client = new Client({
 });
 
 let menuImage;
+let orderLink = "https://feedme.cc/681c7c3c44b369001c432de7";
 const processingUsers = new Set();
 
 client.once('ready', async () => {
